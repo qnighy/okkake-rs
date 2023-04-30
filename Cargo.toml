@@ -9,6 +9,7 @@ publish = false
 [dependencies]
 serde = { version = "1.0.160", features = ["derive"] }
 quick-xml = { version = "0.28.2", features = ["serialize"] }
+time = { version = "0.3.20", features = ["serde-well-known"] }
 shuttle-runtime = "0.15.0"
 axum = "0.6.18"
 shuttle-axum = "0.15.0"
