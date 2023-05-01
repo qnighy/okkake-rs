@@ -96,7 +96,7 @@ async fn atom(Extension(state): Extension<Arc<State>>, Path(id): Path<Ncode>) ->
 #[shuttle_runtime::main]
 async fn axum() -> shuttle_axum::ShuttleAxum {
     let state = State {
-        base: "https://okkake.qnighy.info".to_owned(),
+        base: "https://okkake.shuttleapp.rs".to_owned(),
     };
     let router = Router::new()
         .route("/hello", get(hello_world))
