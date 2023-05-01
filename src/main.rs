@@ -89,7 +89,11 @@ async fn atom(Extension(state): Extension<Arc<State>>, Path(id): Path<Ncode>) ->
             },
         ],
     };
-    let feed = quick_xml::se::to_string(&feed).unwrap();
+    let feed = {
+        let mut s = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        quick_xml::se::to_writer(&mut s, &feed).unwrap();
+        s
+    };
     ([(CONTENT_TYPE, "application/atom+xml")], feed)
 }
 
