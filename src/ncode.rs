@@ -16,7 +16,7 @@ impl fmt::Display for Ncode {
         }
         let hi = (self.0 - 1) / 9999;
         let lo = (self.0 - 1) % 9999 + 1;
-        write!(f, "n{}", lo)?;
+        write!(f, "n{:04}", lo)?;
         {
             let mut x = hi;
             let mut buf = [0; 20];
