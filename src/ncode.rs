@@ -1,7 +1,11 @@
 use std::fmt;
 use std::str::{self, FromStr};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+use serde_with::{DeserializeFromStr, SerializeDisplay};
+
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, SerializeDisplay, DeserializeFromStr,
+)]
 pub(crate) struct Ncode(u32);
 
 impl fmt::Display for Ncode {
@@ -31,6 +35,12 @@ impl fmt::Display for Ncode {
 
 #[derive(Debug, Clone)]
 pub(crate) struct NcodeParseError;
+
+impl fmt::Display for NcodeParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Invalid ncode")
+    }
+}
 
 impl FromStr for Ncode {
     type Err = NcodeParseError;

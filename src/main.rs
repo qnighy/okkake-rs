@@ -1,17 +1,27 @@
 mod atom;
 mod ncode;
 
+use std::sync::Arc;
+
+use axum::extract::Path;
 use axum::http::header::CONTENT_TYPE;
 use axum::response::IntoResponse;
 use axum::routing::get;
-use axum::Router;
+use axum::{Extension, Router};
 use time::OffsetDateTime;
+
+use crate::ncode::Ncode;
+
+#[derive(Debug)]
+struct State {
+    base: String,
+}
 
 async fn hello_world() -> &'static str {
     "Hello, world!"
 }
 
-async fn atom() -> impl IntoResponse {
+async fn atom(Extension(state): Extension<Arc<State>>, Path(id): Path<Ncode>) -> impl IntoResponse {
     let now = OffsetDateTime::now_utc();
     let feed = atom::Feed {
         xmlns: atom::Feed::XMLNS,
@@ -31,10 +41,10 @@ async fn atom() -> impl IntoResponse {
         links: vec![atom::Link {
             rel: "self",
             type_: "application/atom+xml",
-            href: "https://example.com/".to_owned(),
+            href: format!("{}/novels/{}/atom.xml", state.base, id),
         }],
         id: atom::Id {
-            text: "https://example.com/".to_owned(),
+            text: format!("{}/novels/{}/atom.xml", state.base, id),
         },
         author: atom::Author {
             name: atom::Name {
@@ -55,10 +65,10 @@ async fn atom() -> impl IntoResponse {
                 links: vec![atom::Link {
                     rel: "alternate",
                     type_: "text/html",
-                    href: "https://example.com/article/1".to_owned(),
+                    href: format!("https://ncode.syosetu.com/{}/1/", id),
                 }],
                 id: atom::Id {
-                    text: "https://example.com/article/1".to_owned(),
+                    text: format!("https://ncode.syosetu.com/{}/1/", id),
                 },
             },
             atom::Entry {
@@ -71,10 +81,10 @@ async fn atom() -> impl IntoResponse {
                 links: vec![atom::Link {
                     rel: "alternate",
                     type_: "text/html",
-                    href: "https://example.com/article/2".to_owned(),
+                    href: format!("https://ncode.syosetu.com/{}/2/", id),
                 }],
                 id: atom::Id {
-                    text: "https://example.com/article/2".to_owned(),
+                    text: format!("https://ncode.syosetu.com/{}/2/", id),
                 },
             },
         ],
@@ -85,9 +95,13 @@ async fn atom() -> impl IntoResponse {
 
 #[shuttle_runtime::main]
 async fn axum() -> shuttle_axum::ShuttleAxum {
+    let state = State {
+        base: "https://okkake.qnighy.info".to_owned(),
+    };
     let router = Router::new()
         .route("/hello", get(hello_world))
-        .route("/novels/:id/atom.xml", get(atom));
+        .route("/novels/:id/atom.xml", get(atom))
+        .layer(Extension(Arc::new(state)));
 
     Ok(router.into())
 }
