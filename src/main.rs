@@ -1,4 +1,5 @@
 mod atom;
+mod ncode;
 
 use axum::http::header::CONTENT_TYPE;
 use axum::response::IntoResponse;
