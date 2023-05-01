@@ -24,76 +24,49 @@ async fn hello_world() -> &'static str {
 async fn atom(Extension(state): Extension<Arc<State>>, Path(id): Path<Ncode>) -> impl IntoResponse {
     let now = OffsetDateTime::now_utc();
     let feed = atom::Feed {
-        xmlns: atom::Feed::XMLNS,
-        title: atom::Title {
-            type_: "text",
-            text: "Title title title".to_owned(),
-        },
-        subtitle: atom::Subtitle {
-            type_: "text",
-            text: "Subtitle subtitle subtitle".to_owned(),
-        },
-        updated: atom::Updated { value: now },
+        title: "Title title title".to_owned(),
+        subtitle: "Subtitle subtitle subtitle".to_owned(),
+        updated: now,
         generator: atom::Generator {
-            version: "0.1.0",
-            text: "Okkake-rs".to_owned(),
+            version: "0.1.0".to_owned(),
+            name: "Okkake-rs".to_owned(),
         },
         links: vec![atom::Link {
-            rel: "self",
-            type_: "application/atom+xml",
+            rel: "self".to_owned(),
+            type_: "application/atom+xml".to_owned(),
             href: format!("{}/novels/{}/atom.xml", state.base, id),
         }],
-        id: atom::Id {
-            text: format!("{}/novels/{}/atom.xml", state.base, id),
-        },
+        id: format!("{}/novels/{}/atom.xml", state.base, id),
         author: atom::Author {
-            name: atom::Name {
-                text: "Author author author".to_owned(),
-            },
-            uri: atom::Uri {
-                text: "https://example.com/author/author/author".to_owned(),
-            },
+            name: "Author author author".to_owned(),
+            uri: "https://example.com/author/author/author".to_owned(),
         },
         entries: vec![
             atom::Entry {
-                title: atom::Title {
-                    type_: "html",
-                    text: "Title title title".to_owned(),
-                },
-                published: atom::Published { value: now },
-                updated: atom::Updated { value: now },
+                title: "Title title title".to_owned(),
+                published: now,
+                updated: now,
                 links: vec![atom::Link {
-                    rel: "alternate",
-                    type_: "text/html",
+                    rel: "alternate".to_owned(),
+                    type_: "text/html".to_owned(),
                     href: format!("https://ncode.syosetu.com/{}/1/", id),
                 }],
-                id: atom::Id {
-                    text: format!("https://ncode.syosetu.com/{}/1/", id),
-                },
+                id: format!("https://ncode.syosetu.com/{}/1/", id),
             },
             atom::Entry {
-                title: atom::Title {
-                    type_: "html",
-                    text: "Title title title".to_owned(),
-                },
-                published: atom::Published { value: now },
-                updated: atom::Updated { value: now },
+                title: "Title title title".to_owned(),
+                published: now,
+                updated: now,
                 links: vec![atom::Link {
-                    rel: "alternate",
-                    type_: "text/html",
+                    rel: "alternate".to_owned(),
+                    type_: "text/html".to_owned(),
                     href: format!("https://ncode.syosetu.com/{}/2/", id),
                 }],
-                id: atom::Id {
-                    text: format!("https://ncode.syosetu.com/{}/2/", id),
-                },
+                id: format!("https://ncode.syosetu.com/{}/2/", id),
             },
         ],
     };
-    let feed = {
-        let mut s = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-        quick_xml::se::to_writer(&mut s, &feed).unwrap();
-        s
-    };
+    let feed = feed.to_xml();
     ([(CONTENT_TYPE, "application/atom+xml")], feed)
 }
 
