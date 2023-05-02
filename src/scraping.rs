@@ -3,9 +3,25 @@ use scraper::Selector;
 
 const NUM_LIMIT: usize = 10000;
 
+static NOVEL_TITLE_SELECTOR: Lazy<Selector> =
+    Lazy::new(|| Selector::parse(".novel_title").unwrap());
 static SUBTITLE_SELECTOR: Lazy<Selector> = Lazy::new(|| Selector::parse(".subtitle a").unwrap());
-pub(crate) fn extract(html: &str) -> Vec<String> {
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct NovelData {
+    pub(crate) novel_title: String,
+    pub(crate) subtitles: Vec<String>,
+}
+pub(crate) fn extract(html: &str) -> NovelData {
     let html = scraper::Html::parse_document(html);
+    let mut novel_title = String::from("");
+    for elem in html.select(&NOVEL_TITLE_SELECTOR) {
+        let s = elem.text().collect::<Vec<_>>().concat();
+        if !s.is_empty() {
+            novel_title = s;
+            break;
+        }
+    }
     let mut subtitles = Vec::new();
     for elem in html.select(&SUBTITLE_SELECTOR) {
         let Some(href) = elem.value().attr("href") else {
@@ -22,7 +38,10 @@ pub(crate) fn extract(html: &str) -> Vec<String> {
         }
         subtitles[num] = elem.text().collect::<Vec<_>>().concat();
     }
-    subtitles
+    NovelData {
+        novel_title,
+        subtitles,
+    }
 }
 
 fn pathnum(href: &str) -> Option<usize> {
@@ -50,8 +69,9 @@ fn pathnum(href: &str) -> Option<usize> {
 fn test_extract() {
     let html = include_str!("../tests/sample.html");
     let subtitles = extract(html);
+    assert_eq!(subtitles.novel_title, "Novel title novel title novel title");
     assert_eq!(
-        subtitles,
+        subtitles.subtitles,
         &[
             "First first first first",
             "Second second second second",
