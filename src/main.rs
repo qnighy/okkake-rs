@@ -1,5 +1,6 @@
 mod atom;
 mod ncode;
+mod scraping;
 
 use std::sync::Arc;
 
