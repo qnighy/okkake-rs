@@ -16,7 +16,6 @@ pub(crate) enum ScrapingError {
 pub(crate) async fn scrape(client: &Client, ncode: Ncode) -> Result<NovelData, ScrapingError> {
     let body = client
         .get(format!("https://ncode.syosetu.com/{}", ncode))
-        .header("User-Agent", "okkake-rs/0.1.0")
         .send()
         .await?
         .text()

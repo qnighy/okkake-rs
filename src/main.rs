@@ -9,6 +9,7 @@ use axum::http::header::CONTENT_TYPE;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Extension, Router};
+use shuttle_secrets::SecretStore;
 use time::OffsetDateTime;
 
 use crate::ncode::Ncode;
@@ -76,10 +77,23 @@ async fn atom(Extension(state): Extension<Arc<State>>, Path(id): Path<Ncode>) ->
 }
 
 #[shuttle_runtime::main]
-async fn axum() -> shuttle_axum::ShuttleAxum {
+async fn axum(#[shuttle_secrets::Secrets] secret_store: SecretStore) -> shuttle_axum::ShuttleAxum {
+    let bot_author_email = secret_store.get("BOT_AUTHOR_EMAIL");
+    let reqwest_client = reqwest::Client::builder()
+        .default_headers({
+            let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert("User-Agent", "okkake-rs/0.1.0".parse().unwrap());
+            if let Some(bot_author_email) = &bot_author_email {
+                headers.insert("From", bot_author_email.parse().unwrap());
+            }
+            headers
+        })
+        .build()
+        .unwrap();
+    eprintln!("client = {:?}", reqwest_client);
     let state = State {
         base: "https://okkake.shuttleapp.rs".to_owned(),
-        reqwest_client: reqwest::Client::new(),
+        reqwest_client,
     };
     let router = Router::new()
         .route("/hello", get(hello_world))
