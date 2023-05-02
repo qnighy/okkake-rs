@@ -9,10 +9,11 @@ use axum::http::header::CONTENT_TYPE;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Extension, Router};
+use rand::Rng;
 use scraping::NovelData;
 use shuttle_secrets::SecretStore;
 use sqlx::{Executor, PgPool};
-use time::OffsetDateTime;
+use time::{OffsetDateTime, PrimitiveDateTime};
 
 use crate::ncode::Ncode;
 use crate::scraping::scrape;
@@ -29,8 +30,7 @@ async fn hello_world() -> &'static str {
 }
 
 async fn atom(Extension(state): Extension<Arc<State>>, Path(id): Path<Ncode>) -> impl IntoResponse {
-    let novel_data = get_or_scrape(&state.reqwest_client, &state.db, id).await;
-    eprintln!("novel_data = {:#?}", novel_data);
+    let _novel_data = get_or_scrape(&state.reqwest_client, &state.db, id).await;
     let now = OffsetDateTime::now_utc();
     let feed = atom::Feed {
         title: "Title title title".to_owned(),
@@ -81,7 +81,63 @@ async fn atom(Extension(state): Extension<Arc<State>>, Path(id): Path<Ncode>) ->
 
 async fn get_or_scrape(client: &reqwest::Client, db: &PgPool, ncode: Ncode) -> NovelData {
     let now = OffsetDateTime::now_utc();
+    let force_refresh_time = now - time::Duration::hours(24);
+    let random_refresh_time = now - time::Duration::hours(12);
+    let force_refresh_time_on_err = now - time::Duration::hours(2);
+    let random_refresh_time_on_err = now - time::Duration::hours(1);
+
+    #[derive(sqlx::FromRow)]
+    struct Row {
+        data: sqlx::types::Json<NovelData>,
+        error: Option<String>,
+        last_fetched_at: PrimitiveDateTime,
+    }
+
+    let row = sqlx::query_as::<_, Row>(
+        "
+SELECT data, error, last_fetched_at
+FROM novel_data
+WHERE ncode = $1;",
+    )
+    .bind(ncode.to_string())
+    .fetch_optional(db)
+    .await
+    .unwrap();
+
+    if let Some(row) = &row {
+        let last_fetched_at = row.last_fetched_at.assume_utc();
+        let do_refresh = if row.error.is_none() {
+            let t = force_refresh_time
+                + (random_refresh_time - force_refresh_time)
+                    * rand::thread_rng().gen_range(0.0..1.0);
+            last_fetched_at < t
+        } else {
+            let t = force_refresh_time_on_err
+                + (random_refresh_time_on_err - force_refresh_time_on_err)
+                    * rand::thread_rng().gen_range(0.0..1.0);
+            last_fetched_at < t
+        };
+        if !do_refresh {
+            eprintln!("Reusing response");
+            return if let Some(e) = &row.error {
+                todo!("{}", e);
+            } else {
+                row.data.0.clone()
+            };
+        }
+    }
+
     let result = scrape(client, ncode).await;
+    if result.is_err() {
+        if let Some(row) = &row {
+            let last_fetched_at = row.last_fetched_at.assume_utc();
+            if row.error.is_none() && last_fetched_at >= force_refresh_time {
+                eprintln!("Reusing response");
+                // Reuse cache on error
+                return row.data.0.clone();
+            }
+        }
+    }
     {
         let data = result.as_ref().ok().cloned().unwrap_or(NovelData {
             novel_title: Default::default(),
@@ -104,6 +160,7 @@ DO UPDATE SET data = $2, error = $3, last_fetched_at = $4;",
         .await
         .unwrap();
     }
+    eprintln!("Using fresh response");
     result.unwrap()
 }
 

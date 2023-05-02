@@ -1438,6 +1438,7 @@ dependencies = [
  "axum",
  "once_cell",
  "quick-xml",
+ "rand 0.8.5",
  "reqwest",
  "scraper",
  "serde",
