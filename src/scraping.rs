@@ -1,6 +1,7 @@
 use once_cell::sync::Lazy;
 use reqwest::Client;
 use scraper::Selector;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::ncode::Ncode;
@@ -30,7 +31,7 @@ static NOVEL_TITLE_SELECTOR: Lazy<Selector> =
     Lazy::new(|| Selector::parse(".novel_title").unwrap());
 static SUBTITLE_SELECTOR: Lazy<Selector> = Lazy::new(|| Selector::parse(".subtitle a").unwrap());
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct NovelData {
     pub(crate) novel_title: String,
     pub(crate) subtitles: Vec<String>,

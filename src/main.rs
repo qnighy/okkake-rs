@@ -9,7 +9,9 @@ use axum::http::header::CONTENT_TYPE;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Extension, Router};
+use scraping::NovelData;
 use shuttle_secrets::SecretStore;
+use sqlx::{Executor, PgPool};
 use time::OffsetDateTime;
 
 use crate::ncode::Ncode;
@@ -19,6 +21,7 @@ use crate::scraping::scrape;
 struct State {
     base: String,
     reqwest_client: reqwest::Client,
+    db: PgPool,
 }
 
 async fn hello_world() -> &'static str {
@@ -26,7 +29,7 @@ async fn hello_world() -> &'static str {
 }
 
 async fn atom(Extension(state): Extension<Arc<State>>, Path(id): Path<Ncode>) -> impl IntoResponse {
-    let novel_data = scrape(&state.reqwest_client, id).await.unwrap();
+    let novel_data = get_or_scrape(&state.reqwest_client, &state.db, id).await;
     eprintln!("novel_data = {:#?}", novel_data);
     let now = OffsetDateTime::now_utc();
     let feed = atom::Feed {
@@ -76,8 +79,39 @@ async fn atom(Extension(state): Extension<Arc<State>>, Path(id): Path<Ncode>) ->
     ([(CONTENT_TYPE, "application/atom+xml")], feed)
 }
 
+async fn get_or_scrape(client: &reqwest::Client, db: &PgPool, ncode: Ncode) -> NovelData {
+    let now = OffsetDateTime::now_utc();
+    let result = scrape(client, ncode).await;
+    {
+        let data = result.as_ref().ok().cloned().unwrap_or(NovelData {
+            novel_title: Default::default(),
+            subtitles: Default::default(),
+        });
+        let error = result.as_ref().err().map(|e| e.to_string());
+        sqlx::query(
+            "
+INSERT INTO novel_data
+(ncode, data, error, last_fetched_at)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (ncode)
+DO UPDATE SET data = $2, error = $3, last_fetched_at = $4;",
+        )
+        .bind(ncode.to_string())
+        .bind(sqlx::types::Json(data))
+        .bind(error)
+        .bind(now)
+        .execute(db)
+        .await
+        .unwrap();
+    }
+    result.unwrap()
+}
+
 #[shuttle_runtime::main]
-async fn axum(#[shuttle_secrets::Secrets] secret_store: SecretStore) -> shuttle_axum::ShuttleAxum {
+async fn axum(
+    #[shuttle_secrets::Secrets] secret_store: SecretStore,
+    #[shuttle_shared_db::Postgres(local_uri = "{secrets.DEV_DATABASE_URL}")] db: PgPool,
+) -> shuttle_axum::ShuttleAxum {
     let bot_author_email = secret_store.get("BOT_AUTHOR_EMAIL");
     let reqwest_client = reqwest::Client::builder()
         .default_headers({
@@ -90,10 +124,13 @@ async fn axum(#[shuttle_secrets::Secrets] secret_store: SecretStore) -> shuttle_
         })
         .build()
         .unwrap();
-    eprintln!("client = {:?}", reqwest_client);
+
+    db.execute(include_str!("../schema.sql")).await.unwrap();
+
     let state = State {
         base: "https://okkake.shuttleapp.rs".to_owned(),
         reqwest_client,
+        db,
     };
     let router = Router::new()
         .route("/hello", get(hello_world))
