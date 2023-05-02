@@ -12,10 +12,12 @@ use axum::{Extension, Router};
 use time::OffsetDateTime;
 
 use crate::ncode::Ncode;
+use crate::scraping::scrape;
 
 #[derive(Debug)]
 struct State {
     base: String,
+    reqwest_client: reqwest::Client,
 }
 
 async fn hello_world() -> &'static str {
@@ -23,6 +25,8 @@ async fn hello_world() -> &'static str {
 }
 
 async fn atom(Extension(state): Extension<Arc<State>>, Path(id): Path<Ncode>) -> impl IntoResponse {
+    let novel_data = scrape(&state.reqwest_client, id).await.unwrap();
+    eprintln!("novel_data = {:#?}", novel_data);
     let now = OffsetDateTime::now_utc();
     let feed = atom::Feed {
         title: "Title title title".to_owned(),
@@ -75,6 +79,7 @@ async fn atom(Extension(state): Extension<Arc<State>>, Path(id): Path<Ncode>) ->
 async fn axum() -> shuttle_axum::ShuttleAxum {
     let state = State {
         base: "https://okkake.shuttleapp.rs".to_owned(),
+        reqwest_client: reqwest::Client::new(),
     };
     let router = Router::new()
         .route("/hello", get(hello_world))
