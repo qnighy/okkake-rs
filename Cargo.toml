@@ -9,6 +9,7 @@ publish = false
 [dependencies]
 thiserror = "1.0.40"
 once_cell = { version = "1.17.1", default-features = false, features = [] }
+url = "2.3.1"
 serde = { version = "1.0.160", features = ["derive"] }
 serde_with = "2.3.3"
 quick-xml = { version = "0.28.2", features = ["serialize"] }

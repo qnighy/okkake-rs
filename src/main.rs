@@ -5,15 +5,17 @@ mod scraping;
 
 use std::sync::Arc;
 
-use axum::extract::Path;
+use axum::extract::{Path, Query};
 use axum::http::header::CONTENT_TYPE;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Extension, Router};
 use rand::Rng;
+use serde::Deserialize;
 use shuttle_secrets::SecretStore;
 use sqlx::{Executor, PgPool};
 use thiserror::Error;
+use time::format_description::well_known::Rfc3339;
 use time::{OffsetDateTime, PrimitiveDateTime};
 
 use crate::build::build_feed;
@@ -33,6 +35,8 @@ async fn hello_world() -> &'static str {
 
 #[derive(Debug, Error)]
 enum AtomError {
+    #[error("Redirecting to: {0}")]
+    Redirect(String),
     #[error("DB error: {0}")]
     DBError(#[from] sqlx::Error),
     #[error("DB error: {0}")]
@@ -42,6 +46,11 @@ enum AtomError {
 impl IntoResponse for AtomError {
     fn into_response(self) -> axum::response::Response {
         match self {
+            AtomError::Redirect(url) => (
+                axum::http::StatusCode::TEMPORARY_REDIRECT,
+                [("Location", &url[..])],
+            )
+                .into_response(),
             _ => (
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 format!("{}", self),
@@ -51,10 +60,30 @@ impl IntoResponse for AtomError {
     }
 }
 
+#[derive(Deserialize)]
+struct AtomParams {
+    #[serde(default, deserialize_with = "parse_rfc3339")]
+    start: Option<OffsetDateTime>,
+}
+
 async fn atom(
     Extension(state): Extension<Arc<State>>,
     Path(id): Path<Ncode>,
+    Query(params): Query<AtomParams>,
 ) -> Result<impl IntoResponse, AtomError> {
+    let Some(start) = &params.start else {
+        let start = OffsetDateTime::now_utc()
+            .replace_nanosecond(0).unwrap()
+            .replace_second(0).unwrap();
+        eprintln!("now_utc = {}", start.format(&Rfc3339).unwrap());
+        let url = url::Url::parse_with_params(
+            &format!("http://example.com/novels/{}/atom.xml", id),
+            &[("start", &start.format(&Rfc3339).unwrap())]
+        ).unwrap();
+        eprintln!("url = {}", url);
+        return Err(AtomError::Redirect(format!("{}?{}", url.path(), url.query().unwrap())));
+    };
+
     let novel_data = get_or_scrape(&state.reqwest_client, &state.db, id).await?;
     let now = OffsetDateTime::now_utc();
     let feed = build_feed(&state.base, id, &novel_data, now);
@@ -184,4 +213,17 @@ async fn axum(
         .layer(Extension(Arc::new(state)));
 
     Ok(router.into())
+}
+
+fn parse_rfc3339<'de, D>(de: D) -> Result<Option<OffsetDateTime>, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    let opt = Option::<String>::deserialize(de)?;
+    match opt.as_deref() {
+        None | Some("") => Ok(None),
+        Some(s) => OffsetDateTime::parse(s, &Rfc3339)
+            .map_err(serde::de::Error::custom)
+            .map(Some),
+    }
 }
