@@ -31,12 +31,15 @@ static NOVEL_TITLE_SELECTOR: Lazy<Selector> =
     Lazy::new(|| Selector::parse(".novel_title").unwrap());
 static NOVEL_DESCRIPTION_SELECTOR: Lazy<Selector> =
     Lazy::new(|| Selector::parse("#novel_ex").unwrap());
+static AUTHOR_SELECTOR: Lazy<Selector> =
+    Lazy::new(|| Selector::parse(".novel_writername").unwrap());
 static SUBTITLE_SELECTOR: Lazy<Selector> = Lazy::new(|| Selector::parse(".subtitle a").unwrap());
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct NovelData {
     pub(crate) novel_title: String,
     pub(crate) novel_description: String,
+    pub(crate) author: String,
     pub(crate) subtitles: Vec<String>,
 }
 
@@ -50,6 +53,10 @@ pub(crate) enum ExtractError {
     MissingDesc,
     #[error("too many description")]
     TooManyDescs,
+    #[error("missing author")]
+    MissingAuthor,
+    #[error("too many authors")]
+    TooManyAuthor,
     #[error("no episode found")]
     NoEpisode,
 }
@@ -68,6 +75,14 @@ pub(crate) fn extract(html: &str) -> Result<NovelData, ExtractError> {
         ExtractError::TooManyDescs,
         ExtractError::MissingDesc,
     )?;
+    let author = textof(
+        &html,
+        &AUTHOR_SELECTOR,
+        ExtractError::TooManyAuthor,
+        ExtractError::MissingAuthor,
+    )?;
+    let author = author.trim();
+    let author = author.strip_prefix("作者：").unwrap_or(author).to_owned();
 
     let mut subtitles = Vec::new();
     for elem in html.select(&SUBTITLE_SELECTOR) {
@@ -91,6 +106,7 @@ pub(crate) fn extract(html: &str) -> Result<NovelData, ExtractError> {
     Ok(NovelData {
         novel_title,
         novel_description,
+        author,
         subtitles,
     })
 }
@@ -138,6 +154,11 @@ fn test_extract() {
     let html = include_str!("../tests/sample.html");
     let subtitles = extract(html).unwrap();
     assert_eq!(subtitles.novel_title, "Novel title novel title novel title");
+    assert_eq!(
+        subtitles.novel_description,
+        "\u{3000}Description description description description description description description description description description description description description description description"
+    );
+    assert_eq!(subtitles.author, "Author author author");
     assert_eq!(
         subtitles.subtitles,
         &[

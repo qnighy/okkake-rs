@@ -37,8 +37,8 @@ pub(crate) fn build_feed(
         }],
         id: url.to_string(),
         author: atom::Author {
-            name: "Author author author".to_owned(),
-            uri: "https://example.com/author/author/author".to_owned(),
+            name: novel_data.author.clone(),
+            uri: None,
         },
         entries: (min_days..max_days)
             .map(|day| {

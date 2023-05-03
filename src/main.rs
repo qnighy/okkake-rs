@@ -158,6 +158,7 @@ WHERE ncode = $1;",
         let data = result.as_ref().ok().cloned().unwrap_or(NovelData {
             novel_title: Default::default(),
             novel_description: Default::default(),
+            author: Default::default(),
             subtitles: Default::default(),
         });
         let error = result.as_ref().err().map(|e| e.to_string());

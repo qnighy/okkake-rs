@@ -104,7 +104,7 @@ impl Link {
 #[derive(Debug, Clone)]
 pub(crate) struct Author {
     pub(crate) name: String,
-    pub(crate) uri: String,
+    pub(crate) uri: Option<String>,
 }
 
 impl Author {
@@ -119,9 +119,11 @@ impl Author {
         writer
             .create_element("name")
             .write_text_content(BytesText::new(&self.name))?;
-        writer
-            .create_element("uri")
-            .write_text_content(BytesText::new(&self.uri))?;
+        if let Some(uri) = &self.uri {
+            writer
+                .create_element("uri")
+                .write_text_content(BytesText::new(uri))?;
+        }
         Ok(())
     }
 }
