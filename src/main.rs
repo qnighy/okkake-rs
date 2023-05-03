@@ -10,13 +10,13 @@ use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Extension, Router};
 use rand::Rng;
-use scraping::NovelData;
 use shuttle_secrets::SecretStore;
 use sqlx::{Executor, PgPool};
+use thiserror::Error;
 use time::{OffsetDateTime, PrimitiveDateTime};
 
 use crate::ncode::Ncode;
-use crate::scraping::scrape;
+use crate::scraping::{scrape, NovelData, ScrapingError};
 
 #[derive(Debug)]
 struct State {
@@ -29,8 +29,31 @@ async fn hello_world() -> &'static str {
     "Hello, world!"
 }
 
-async fn atom(Extension(state): Extension<Arc<State>>, Path(id): Path<Ncode>) -> impl IntoResponse {
-    let _novel_data = get_or_scrape(&state.reqwest_client, &state.db, id).await;
+#[derive(Debug, Error)]
+enum AtomError {
+    #[error("DB error: {0}")]
+    DBError(#[from] sqlx::Error),
+    #[error("DB error: {0}")]
+    ScrapingError(#[from] ScrapingError),
+}
+
+impl IntoResponse for AtomError {
+    fn into_response(self) -> axum::response::Response {
+        match self {
+            _ => (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("{}", self),
+            )
+                .into_response(),
+        }
+    }
+}
+
+async fn atom(
+    Extension(state): Extension<Arc<State>>,
+    Path(id): Path<Ncode>,
+) -> Result<impl IntoResponse, AtomError> {
+    let _novel_data = get_or_scrape(&state.reqwest_client, &state.db, id).await?;
     let now = OffsetDateTime::now_utc();
     let feed = atom::Feed {
         title: "Title title title".to_owned(),
@@ -76,10 +99,14 @@ async fn atom(Extension(state): Extension<Arc<State>>, Path(id): Path<Ncode>) ->
         ],
     };
     let feed = feed.to_xml();
-    ([(CONTENT_TYPE, "application/atom+xml")], feed)
+    Ok(([(CONTENT_TYPE, "application/atom+xml")], feed))
 }
 
-async fn get_or_scrape(client: &reqwest::Client, db: &PgPool, ncode: Ncode) -> NovelData {
+async fn get_or_scrape(
+    client: &reqwest::Client,
+    db: &PgPool,
+    ncode: Ncode,
+) -> Result<NovelData, AtomError> {
     let now = OffsetDateTime::now_utc();
     let force_refresh_time = now - time::Duration::hours(24);
     let random_refresh_time = now - time::Duration::hours(12);
@@ -101,8 +128,7 @@ WHERE ncode = $1;",
     )
     .bind(ncode.to_string())
     .fetch_optional(db)
-    .await
-    .unwrap();
+    .await?;
 
     if let Some(row) = &row {
         let last_fetched_at = row.last_fetched_at.assume_utc();
@@ -119,11 +145,11 @@ WHERE ncode = $1;",
         };
         if !do_refresh {
             eprintln!("Reusing response");
-            return if let Some(e) = &row.error {
+            return Ok(if let Some(e) = &row.error {
                 todo!("{}", e);
             } else {
                 row.data.0.clone()
-            };
+            });
         }
     }
 
@@ -134,7 +160,7 @@ WHERE ncode = $1;",
             if row.error.is_none() && last_fetched_at >= force_refresh_time {
                 eprintln!("Reusing response");
                 // Reuse cache on error
-                return row.data.0.clone();
+                return Ok(row.data.0.clone());
             }
         }
     }
@@ -158,11 +184,10 @@ DO UPDATE SET data = $2, error = $3, last_fetched_at = $4;",
         .bind(error)
         .bind(now)
         .execute(db)
-        .await
-        .unwrap();
+        .await?;
     }
     eprintln!("Using fresh response");
-    result.unwrap()
+    Ok(result?)
 }
 
 #[shuttle_runtime::main]
