@@ -1,6 +1,6 @@
 use once_cell::sync::Lazy;
 use reqwest::Client;
-use scraper::Selector;
+use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -29,11 +29,14 @@ const NUM_LIMIT: usize = 10000;
 
 static NOVEL_TITLE_SELECTOR: Lazy<Selector> =
     Lazy::new(|| Selector::parse(".novel_title").unwrap());
+static NOVEL_DESCRIPTION_SELECTOR: Lazy<Selector> =
+    Lazy::new(|| Selector::parse("#novel_ex").unwrap());
 static SUBTITLE_SELECTOR: Lazy<Selector> = Lazy::new(|| Selector::parse(".subtitle a").unwrap());
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct NovelData {
     pub(crate) novel_title: String,
+    pub(crate) novel_description: String,
     pub(crate) subtitles: Vec<String>,
 }
 
@@ -43,29 +46,28 @@ pub(crate) enum ExtractError {
     MissingTitle,
     #[error("too many titles")]
     TooManyTitles,
+    #[error("missing description")]
+    MissingDesc,
+    #[error("too many description")]
+    TooManyDescs,
     #[error("no episode found")]
     NoEpisode,
 }
 
 pub(crate) fn extract(html: &str) -> Result<NovelData, ExtractError> {
     let html = scraper::Html::parse_document(html);
-    let novel_title = {
-        let elems = html
-            .select(&NOVEL_TITLE_SELECTOR)
-            .take(2)
-            .collect::<Vec<_>>();
-        let [elem] = elems[..] else {
-            if elems.len() > 1 {
-                return Err(ExtractError::TooManyTitles);
-            } else {
-                return Err(ExtractError::MissingTitle);
-            }
-        };
-        elem.text().collect::<Vec<_>>().concat()
-    };
-    if novel_title.is_empty() {
-        return Err(ExtractError::MissingTitle);
-    }
+    let novel_title = textof(
+        &html,
+        &NOVEL_TITLE_SELECTOR,
+        ExtractError::TooManyTitles,
+        ExtractError::MissingTitle,
+    )?;
+    let novel_description = textof(
+        &html,
+        &NOVEL_DESCRIPTION_SELECTOR,
+        ExtractError::TooManyDescs,
+        ExtractError::MissingDesc,
+    )?;
 
     let mut subtitles = Vec::new();
     for elem in html.select(&SUBTITLE_SELECTOR) {
@@ -88,8 +90,26 @@ pub(crate) fn extract(html: &str) -> Result<NovelData, ExtractError> {
     }
     Ok(NovelData {
         novel_title,
+        novel_description,
         subtitles,
     })
+}
+
+fn textof(
+    html: &Html,
+    sel: &Selector,
+    e1: ExtractError,
+    e2: ExtractError,
+) -> Result<String, ExtractError> {
+    let elems = html.select(sel).take(2).collect::<Vec<_>>();
+    let [elem] = elems[..] else {
+            if elems.len() > 1 {
+                return Err(e1);
+            } else {
+                return Err(e2);
+            }
+        };
+    Ok(elem.text().collect::<Vec<_>>().concat())
 }
 
 fn pathnum(href: &str) -> Option<usize> {
