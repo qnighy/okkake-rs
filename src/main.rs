@@ -71,22 +71,20 @@ async fn atom(
     Path(id): Path<Ncode>,
     Query(params): Query<AtomParams>,
 ) -> Result<impl IntoResponse, AtomError> {
-    let Some(start) = &params.start else {
+    let Some(start) = params.start else {
         let start = OffsetDateTime::now_utc()
             .replace_nanosecond(0).unwrap()
             .replace_second(0).unwrap();
-        eprintln!("now_utc = {}", start.format(&Rfc3339).unwrap());
         let url = url::Url::parse_with_params(
             &format!("http://example.com/novels/{}/atom.xml", id),
             &[("start", &start.format(&Rfc3339).unwrap())]
         ).unwrap();
-        eprintln!("url = {}", url);
         return Err(AtomError::Redirect(format!("{}?{}", url.path(), url.query().unwrap())));
     };
 
     let novel_data = get_or_scrape(&state.reqwest_client, &state.db, id).await?;
     let now = OffsetDateTime::now_utc();
-    let feed = build_feed(&state.base, id, &novel_data, now);
+    let feed = build_feed(&state.base, id, &novel_data, start, now);
     let feed = feed.to_xml();
     Ok((
         [(CONTENT_TYPE, "application/atom+xml; charset=UTF-8")],
