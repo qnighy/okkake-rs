@@ -10,19 +10,25 @@ use crate::ncode::Ncode;
 pub(crate) enum ScrapingError {
     #[error("request error: {0}")]
     RequestError(#[from] reqwest::Error),
-    #[error("extract error: {0}")]
-    ExtractError(#[from] ExtractError),
+    #[error("got status {0} / response: {1}")]
+    StatusError(u16, String),
+    #[error("extract error: {0} / response: {1}")]
+    ExtractError(#[source] ExtractError, String),
 }
 
 pub(crate) async fn scrape(client: &Client, ncode: Ncode) -> Result<NovelData, ScrapingError> {
-    let body = client
+    let resp = client
         .get(format!("https://ncode.syosetu.com/{}", ncode))
         .send()
-        .await?
-        .text()
         .await?;
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().await?;
+        return Err(ScrapingError::StatusError(status.as_u16(), body));
+    }
+    let body = resp.text().await?;
 
-    Ok(extract(&body)?)
+    extract(&body).map_err(|e| ScrapingError::ExtractError(e, body))
 }
 
 const NUM_LIMIT: usize = 10000;
