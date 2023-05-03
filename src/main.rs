@@ -39,7 +39,9 @@ enum AtomError {
     Redirect(String),
     #[error("DB error: {0}")]
     DBError(#[from] sqlx::Error),
-    #[error("DB error: {0}")]
+    #[error("{0}")]
+    SavedError(String),
+    #[error("Scraping error: {0}")]
     ScrapingError(#[from] ScrapingError),
 }
 
@@ -135,11 +137,11 @@ WHERE ncode = $1;",
         };
         if !do_refresh {
             eprintln!("Reusing response");
-            return Ok(if let Some(e) = &row.error {
-                todo!("{}", e);
+            return if let Some(e) = &row.error {
+                Err(AtomError::SavedError(e.clone()))
             } else {
-                row.data.0.clone()
-            });
+                Ok(row.data.0.clone())
+            };
         }
     }
 
