@@ -23,8 +23,11 @@ struct State {
     base: String,
 }
 
-async fn hello_world() -> &'static str {
-    "Hello, world!"
+async fn root() -> impl IntoResponse {
+    (
+        [(CONTENT_TYPE, "text/html; charset=UTF-8")],
+        include_str!("../public/index.html"),
+    )
 }
 
 #[derive(Debug, Error)]
@@ -97,7 +100,7 @@ async fn axum() -> shuttle_axum::ShuttleAxum {
         base: "https://okkake.shuttleapp.rs".to_owned(),
     };
     let router = Router::new()
-        .route("/hello", get(hello_world))
+        .route("/", get(root))
         .route("/novels/:id/atom.xml", get(atom))
         .layer(Extension(Arc::new(state)));
 

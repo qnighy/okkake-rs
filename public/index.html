@@ -1,0 +1,263 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>小説家になろう追っかけ読書ツール「okkake」</title>
+    <style>
+      .url-line {
+        font-size: 40px;
+      }
+      .url-line input {
+        font-size: 40px;
+      }
+      .novel-data {
+        padding: 1em;
+        border: 1px outset gray;
+      }
+      .error-line {
+        color: red;
+      }
+    </style>
+    <script type="module">
+      import { createElement, useEffect, useState, Fragment } from "https://jspm.dev/react";
+      import { createRoot } from "https://jspm.dev/react-dom/client";
+      import fetchJsonp from "https://jspm.dev/fetch-jsonp";
+
+      const RE_NOVEL_URL = /^https?:\/\/ncode\.syosetu\.com\/(n[0-9]{4}[a-z]+)($|\/)/;
+
+      const App = () => {
+        const [store, setStore] = useState({});
+        const [error, setError] = useState(undefined);
+        const [ncode, setNcode] = useState(undefined);
+        const [altTitle, setAltTitle] = useState("");
+        const [altAuthor, setAltAuthor] = useState("");
+        const [startDate, setStartDate] = useState(() => {
+          const now = new Date();
+          return `${now.getFullYear().toString().padStart(4, "0")}-${(now.getMonth() + 1).toString().padStart(2, "0")}-${now.getDate().toString().padStart(2, "0")}`
+        });
+        const [time, setTime] = useState("06:00");
+        const beginFetch = async (ncode) => {
+          try {
+            const params = new URLSearchParams({
+              ncode,
+              out: "jsonp",
+              of: ["w", "t", "s"].join("-"),
+            });
+            const resp = await fetchJsonp(`https://api.syosetu.com/novelapi/api/?${params}`, { timeout: 5000 });
+            if (!resp.ok) {
+              throw new Error("Request to syosetu.com API failed");
+            }
+            const [, novelData] = await resp.json();
+            if (!novelData) {
+              throw new Error("No novel returned");
+            }
+            setStore((old) => ({
+              ...old,
+              [ncode]: novelData
+            }));
+          } catch (e) {
+            setError(e.message);
+            throw e;
+          }
+        };
+        const onInput = (e) => {
+          const url = e.currentTarget.value;
+          const m = RE_NOVEL_URL.exec(url);
+          if (m) {
+            setNcode(m[1]);
+            if (m[1] !== ncode) {
+              setError(undefined);
+              beginFetch(m[1]);
+            }
+          } else {
+            setError(undefined);
+            setNcode(undefined);
+          }
+        };
+        const novelData = ncode != null ? store[ncode] : undefined;
+        return [
+          createElement(
+            "div",
+            { className: "url-line" },
+            createElement("label", { htmlFor: "novel-url" }, "URL: "),
+            createElement("input", { type: "text", id: "novel-url", onInput }),
+          ),
+          novelData != null
+          ? createElement(
+              "div",
+              { className: "novel-data" },
+              createElement(
+                "h3",
+                { className: "novel-title" },
+                novelData.title,
+              ),
+              createElement(
+                "p",
+                { className: "novel-author" },
+                novelData.writer,
+              ),
+              createElement(
+                "p",
+                { className: "novel-description" },
+                novelData.story,
+              ),
+            )
+          : ncode != null && error == null
+          ? createElement(
+              "div",
+              { className: "novel-data-loading"},
+              "データ読み込み中……",
+            )
+          : null,
+          error != null
+          ? createElement(
+              "div",
+              { className: "error-line" },
+              `エラー: ${error}`
+            )
+          : null,
+          ncode != null && novelData == null
+          ? createElement(
+              "details",
+              {},
+              createElement(
+                "summary",
+                {},
+                "手動で小説情報を入力する"
+              ),
+              createElement(
+                "div",
+                {},
+                createElement(
+                  "label",
+                  { htmlFor: "alt-title" },
+                  "タイトル: "
+                ),
+                createElement(
+                  "input",
+                  { type: "text", id: "alt-title", value: altTitle, onInput: (e) => { setAltTitle(e.currentTarget.value) } },
+                ),
+              ),
+              createElement(
+                "div",
+                {},
+                createElement(
+                  "label",
+                  { htmlFor: "alt-author" },
+                  "作者: "
+                ),
+                createElement(
+                  "input",
+                  { type: "text", id: "alt-author", value: altAuthor, onInput: (e) => { setAltAuthor(e.currentTarget.value) } },
+                ),
+              ),
+            )
+          : null,
+          createElement(
+            "p",
+            {},
+            createElement(
+              "label",
+              {},
+              "毎日",
+              createElement(
+                "input",
+                { type: "time", value: time, onInput: (e) => { setTime(e.currentTarget.value) } },
+              ),
+              "時に配信",
+            ),
+          ),
+          createElement(
+            "p",
+            {},
+            createElement(
+              "label",
+              {},
+              createElement(
+                "input",
+                { type: "date", value: startDate, onInput: (e) => { setStartDate(e.currentTarget.value) } },
+              ),
+              "から配信開始",
+            ),
+          ),
+          novelData || (ncode && altTitle && altAuthor)
+          ? [
+              createElement("hr"),
+              createElement(
+                FeedShow,
+                {
+                  ncode,
+                  title: novelData?.title ?? altTitle,
+                  author: novelData?.writer ?? altAuthor,
+                  time,
+                  startDate,
+                },
+              ),
+            ]
+          : null,
+        ];
+      };
+
+      const FeedShow = (props) => {
+        const { ncode, title, author, time, startDate } = props;
+        const [copied, setCopied] = useState(false);
+        const start = new Date(Date.parse(`${startDate}T${time}+09:00`)).toISOString();
+        const feedUrl = `${location.origin}/novels/${ncode}/atom.xml?${new URLSearchParams({
+          start,
+          title,
+          author,
+        })}`;
+
+        useEffect(() => {
+          if (copied) {
+            const timer = setTimeout(() => {
+              setCopied(false)
+            }, 1000);
+            return () => clearTimeout(timer);
+          }
+        }, [copied]);
+
+        return [
+          createElement(
+            "p",
+            {},
+            `「${author}」による小説『${title}』を、${startDate}以降毎日${time}に追っかけ配信するRSSができました。以下から利用してください。`,
+          ),
+          createElement(
+            "ul",
+            {},
+            createElement(
+              "li",
+              {},
+              createElement(
+                "a",
+                { href: feedUrl },
+                "RSSを開く"
+              )
+            ),
+            createElement(
+              "li",
+              {},
+              createElement(
+                "button",
+                { onClick: () => {
+                  navigator.clipboard.writeText(feedUrl);
+                  setCopied(true);
+                } },
+                "クリップボードにコピー"
+              ),
+              copied ? "✅ コピーしました" : null,
+            ),
+          ),
+        ];
+      };
+
+      const root = createRoot(document.querySelector("#root"));
+      root.render(createElement(App));
+    </script>
+  </head>
+  <body>
+    <h1><span style="font-size: 60%;">小説家になろう追っかけ読書ツール</span><br>「okkake」</h1>
+    <div id="root"></div>
+  </body>
+</html>
