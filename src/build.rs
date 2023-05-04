@@ -3,16 +3,28 @@ use time::{Duration, OffsetDateTime};
 
 use crate::atom;
 use crate::ncode::Ncode;
-use crate::scraping::NovelData;
 
 const DAYS: u64 = 100;
 
+#[derive(Debug, Clone)]
+pub(crate) struct BuildFeedParams<'a> {
+    pub(crate) base: &'a str,
+    pub(crate) id: Ncode,
+    pub(crate) author: &'a str,
+    pub(crate) title: &'a str,
+    pub(crate) start: OffsetDateTime,
+    pub(crate) now: OffsetDateTime,
+}
+
 pub(crate) fn build_feed(
-    base: &str,
-    id: Ncode,
-    novel_data: &NovelData,
-    start: OffsetDateTime,
-    now: OffsetDateTime,
+    BuildFeedParams {
+        base,
+        id,
+        author,
+        title,
+        start,
+        now,
+    }: BuildFeedParams<'_>,
 ) -> atom::Feed {
     let url = url::Url::parse_with_params(
         &format!("{}/novels/{}/atom.xml", base, id),
@@ -23,8 +35,8 @@ pub(crate) fn build_feed(
     let max_days = Ord::max((now - start).whole_days() + 1, 0) as u64;
     let min_days = max_days.saturating_sub(DAYS);
     atom::Feed {
-        title: format!("【再】{}", novel_data.novel_title),
-        subtitle: format!("『{}』の既存話を再配信します。", novel_data.novel_title),
+        title: format!("【再】{}", title),
+        subtitle: format!("『{}』の既存話を再配信します。", title),
         updated: now,
         generator: atom::Generator {
             version: "0.1.0".to_owned(),
@@ -37,7 +49,7 @@ pub(crate) fn build_feed(
         }],
         id: url.to_string(),
         author: atom::Author {
-            name: novel_data.author.clone(),
+            name: author.to_owned(),
             uri: None,
         },
         entries: (min_days..max_days)
@@ -51,11 +63,7 @@ pub(crate) fn build_feed(
                     &[("start", &start.format(&Rfc3339).unwrap())],
                 )
                 .unwrap();
-                let title = format!(
-                    "連載小説[{}](第{}部分【再】)",
-                    novel_data.novel_title,
-                    ep + 1
-                );
+                let title = format!("連載小説[{}](第{}部分【再】)", title, ep + 1);
                 atom::Entry {
                     title,
                     published: ep_time,
