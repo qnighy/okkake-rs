@@ -11,6 +11,7 @@ use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::{Extension, Router};
 use rand::Rng;
+use reqwest::Proxy;
 use serde::Deserialize;
 use shuttle_secrets::SecretStore;
 use sqlx::{Executor, PgPool};
@@ -189,17 +190,23 @@ async fn axum(
     #[shuttle_shared_db::Postgres(local_uri = "{secrets.DEV_DATABASE_URL}")] db: PgPool,
 ) -> shuttle_axum::ShuttleAxum {
     let bot_author_email = secret_store.get("BOT_AUTHOR_EMAIL");
-    let reqwest_client = reqwest::Client::builder()
-        .default_headers({
+    let reqwest_client = {
+        let builder = reqwest::Client::builder().default_headers({
             let mut headers = reqwest::header::HeaderMap::new();
             headers.insert("User-Agent", "okkake-rs/0.1.0".parse().unwrap());
             if let Some(bot_author_email) = &bot_author_email {
                 headers.insert("From", bot_author_email.parse().unwrap());
             }
             headers
-        })
-        .build()
-        .unwrap();
+        });
+
+        let builder = if let Some(proxy_url) = secret_store.get("HTTP_PROXY") {
+            builder.proxy(Proxy::all(&proxy_url).unwrap())
+        } else {
+            builder
+        };
+        builder.build().unwrap()
+    };
 
     db.execute(include_str!("../schema.sql")).await.unwrap();
 
