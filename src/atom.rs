@@ -1,6 +1,7 @@
 use std::io::Write;
 
 use quick_xml::{events::BytesText, Writer};
+use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
 #[derive(Debug, Clone)]
@@ -41,7 +42,7 @@ impl Feed {
             .with_attribute(("type", "text"))
             .write_text_content(BytesText::new(&self.subtitle))?;
 
-        let updated = self.updated.to_string();
+        let updated = self.updated.format(&Rfc3339).unwrap();
         writer
             .create_element("updated")
             .write_text_content(BytesText::new(&updated))?;
@@ -151,12 +152,12 @@ impl Entry {
             .with_attribute(("type", "text"))
             .write_text_content(BytesText::new(&self.title))?;
 
-        let published = self.published.to_string();
+        let published = self.published.format(&Rfc3339).unwrap();
         writer
             .create_element("published")
             .write_text_content(BytesText::new(&published))?;
 
-        let updated = self.updated.to_string();
+        let updated = self.updated.format(&Rfc3339).unwrap();
         writer
             .create_element("updated")
             .write_text_content(BytesText::new(&updated))?;
