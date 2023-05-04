@@ -50,8 +50,13 @@ pub(crate) fn build_feed(
                     &[("start", &start.format(&Rfc3339).unwrap())],
                 )
                 .unwrap();
+                let title = format!(
+                    "連載小説[{}](第{}部分【再】)",
+                    novel_data.novel_title,
+                    ep + 1
+                );
                 atom::Entry {
-                    title: novel_data.subtitles[ep].clone(),
+                    title,
                     published: ep_time,
                     updated: ep_time,
                     links: vec![atom::Link {
