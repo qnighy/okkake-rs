@@ -41,6 +41,7 @@ pub(crate) fn build_feed(
             uri: None,
         },
         entries: (min_days..max_days)
+            .rev()
             .map(|day| {
                 let ep = Ord::min(day as usize, novel_data.subtitles.len() - 1);
                 let ep_time = start + Duration::days(day as i64);
