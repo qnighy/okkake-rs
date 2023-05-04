@@ -43,7 +43,8 @@ pub(crate) fn build_feed(
         entries: (min_days..max_days)
             .rev()
             .map(|day| {
-                let ep = Ord::min(day as usize, novel_data.subtitles.len() - 1);
+                // We do not cap episode; let user unsubscribe it when the feed exceeds the limit
+                let ep = day;
                 let ep_time = start + Duration::days(day as i64);
                 let id_url = url::Url::parse_with_params(
                     &format!("{}/novels/{}/{}/", base, id, day + 1),
