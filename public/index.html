@@ -14,6 +14,27 @@
         padding: 1em;
         border: 1px outset gray;
       }
+
+      .age-confirmation {
+        padding: 1em;
+        border: 1px outset red;
+      }
+      .age-confirmation-button {
+        background: none;
+      }
+      .age-confirmation-button:hover {
+        background: #f0f0f080;
+      }
+      .age-confirmation-button:active {
+        background: #ddddddc0;
+      }
+      .age-confirmation-button.age-confirmation-u18 {
+        border: 1px double blue;
+      }
+      .age-confirmation-button.age-confirmation-o18 {
+        border: 1px double pink;
+      }
+
       .error-line {
         color: red;
       }
@@ -24,8 +45,30 @@
       import fetchJsonp from "https://jspm.dev/fetch-jsonp";
 
       const RE_NOVEL_URL = /^https?:\/\/ncode\.syosetu\.com\/(n[0-9]{4}[a-z]+)($|\/)/;
+      const RE_XNOVEL_URL = /^https?:\/\/novel18\.syosetu\.com\/(n[0-9]{4}[a-z]+)($|\/)/;
+
+      function isR18(ncode) {
+        return ncode.startsWith("x");
+      }
+      function trimX(ncode) {
+        return ncode.startsWith("x") ? ncode.substring(1) : ncode;
+      }
+
+      function readCookie() {
+        return Object.fromEntries(
+          document.cookie.split(/; ?/).flatMap((entry) => {
+            const entrySep = entry.split("=");
+            if (entrySep.length !== 2) {
+              return [];
+            }
+            return [[entrySep[0].trim(), entrySep[1].trim()]];
+          })
+        )
+      }
 
       const App = () => {
+        const [over18, setOver18] = useState(() => readCookie().over18 === "yes");
+        const [under18, setUnder18] = useState(false);
         const [store, setStore] = useState({});
         const [error, setError] = useState(undefined);
         const [ncode, setNcode] = useState(undefined);
@@ -39,11 +82,11 @@
         const beginFetch = async (ncode) => {
           try {
             const params = new URLSearchParams({
-              ncode,
+              ncode: trimX(ncode),
               out: "jsonp",
               of: ["w", "t", "s"].join("-"),
             });
-            const resp = await fetchJsonp(`https://api.syosetu.com/novelapi/api/?${params}`, { timeout: 5000 });
+            const resp = await fetchJsonp(`https://api.syosetu.com/${isR18(ncode) ? "novel18api" : "novelapi"}/api/?${params}`, { timeout: 5000 });
             if (!resp.ok) {
               throw new Error("Request to syosetu.com API failed");
             }
@@ -63,18 +106,24 @@
         const onInput = (e) => {
           const url = e.currentTarget.value;
           const m = RE_NOVEL_URL.exec(url);
-          if (m) {
-            setNcode(m[1]);
-            if (m[1] !== ncode) {
+          const xm = RE_XNOVEL_URL.exec(url);
+          const newNcode = m ? m[1] : xm ? `x${xm[1]}` : null;
+          if (newNcode != null) {
+            setNcode(newNcode);
+            if (newNcode !== ncode) {
+              setUnder18(false);
               setError(undefined);
-              beginFetch(m[1]);
+              beginFetch(newNcode);
             }
           } else {
+            setUnder18(false);
             setError(undefined);
             setNcode(undefined);
           }
         };
         const novelData = ncode != null ? store[ncode] : undefined;
+        const isR18Blocked = novelData && isR18(ncode) && !over18;
+        const filteredNovelData = isR18Blocked ? null : novelData;
         return [
           createElement(
             "div",
@@ -82,7 +131,70 @@
             createElement("label", { htmlFor: "novel-url" }, "URL: "),
             createElement("input", { type: "text", size: 30, id: "novel-url", onInput }),
           ),
-          novelData != null
+          isR18Blocked && under18
+          ? createElement(
+              "div",
+              { className: "error-line" },
+              "年齢制限のため表示できません"
+            )
+          : isR18Blocked
+          ? createElement(
+              "div",
+              { className: "age-confirmation" },
+              createElement(
+                "h2",
+                {},
+                "年齢確認",
+              ),
+              createElement(
+                "p",
+                {},
+                "このページには18歳未満（高校生以下）の方に好ましくない内容が含まれる可能性があります。"
+              ),
+              createElement(
+                "p",
+                {},
+                "18歳未満（高校生以下）の方の閲覧を固くお断りいたします。"
+              ),
+              createElement(
+                "div",
+                {},
+                createElement(
+                  "button",
+                  {
+                    className: "age-confirmation-button age-confirmation-u18",
+                    onClick: () => {
+                      setUnder18(true);
+                    },
+                  },
+                  createElement(
+                    "h3",
+                    {},
+                    "18歳未満（高校生以下）",
+                  ),
+                ),
+              ),
+              createElement(
+                "div",
+                {},
+                createElement(
+                  "button",
+                  {
+                    className: "age-confirmation-button age-confirmation-o18",
+                    onClick: () => {
+                      setOver18(true);
+                      document.cookie = "over18=yes";
+                    },
+                  },
+                  createElement(
+                    "h3",
+                    {},
+                    "18歳以上",
+                  ),
+                ),
+              ),
+            )
+          : novelData != null
           ? createElement(
               "div",
               { className: "novel-data" },
@@ -116,7 +228,7 @@
               `エラー: ${error}`
             )
           : null,
-          ncode != null && novelData == null
+          ncode != null && filteredNovelData == null
           ? createElement(
               "details",
               {},
@@ -180,15 +292,15 @@
               "から配信開始",
             ),
           ),
-          novelData || (ncode && altTitle && altAuthor)
+          filteredNovelData || (ncode && altTitle && altAuthor)
           ? [
               createElement("hr"),
               createElement(
                 FeedShow,
                 {
                   ncode,
-                  title: novelData?.title ?? altTitle,
-                  author: novelData?.writer ?? altAuthor,
+                  title: filteredNovelData?.title ?? altTitle,
+                  author: filteredNovelData?.writer ?? altAuthor,
                   time,
                   startDate,
                 },
@@ -202,7 +314,7 @@
         const { ncode, title, author, time, startDate } = props;
         const [copied, setCopied] = useState(false);
         const start = new Date(Date.parse(`${startDate}T${time}+09:00`)).toISOString();
-        const feedUrl = `${location.origin}/novels/${ncode}/atom.xml?${new URLSearchParams({
+        const feedUrl = `${location.origin}/${isR18(ncode) ? "r18novels" : "novels"}/${trimX(ncode)}/atom.xml?${new URLSearchParams({
           start,
           title,
           author,

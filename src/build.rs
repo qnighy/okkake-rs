@@ -14,6 +14,7 @@ pub(crate) struct BuildFeedParams<'a> {
     pub(crate) title: &'a str,
     pub(crate) start: OffsetDateTime,
     pub(crate) now: OffsetDateTime,
+    pub(crate) category: crate::Category,
 }
 
 pub(crate) fn build_feed(
@@ -24,10 +25,11 @@ pub(crate) fn build_feed(
         title,
         start,
         now,
+        category,
     }: BuildFeedParams<'_>,
 ) -> atom::Feed {
     let url = url::Url::parse_with_params(
-        &format!("{}/novels/{}/atom.xml", base, id),
+        &format!("{}/{}/{}/atom.xml", base, category.novels_name(), id),
         &[("start", &start.format(&Rfc3339).unwrap())],
     )
     .unwrap();
@@ -59,7 +61,7 @@ pub(crate) fn build_feed(
                 let ep = day;
                 let ep_time = start + Duration::days(day as i64);
                 let id_url = url::Url::parse_with_params(
-                    &format!("{}/novels/{}/{}/", base, id, day + 1),
+                    &format!("{}/{}/{}/{}/", base, category.novels_name(), id, day + 1),
                     &[("start", &start.format(&Rfc3339).unwrap())],
                 )
                 .unwrap();
@@ -71,7 +73,12 @@ pub(crate) fn build_feed(
                     links: vec![atom::Link {
                         rel: "alternate".to_owned(),
                         type_: "text/html".to_owned(),
-                        href: format!("https://ncode.syosetu.com/{}/{}/", id, ep + 1),
+                        href: format!(
+                            "https://{}.syosetu.com/{}/{}/",
+                            category.subdomain(),
+                            id,
+                            ep + 1
+                        ),
                     }],
                     id: id_url.to_string(),
                 }

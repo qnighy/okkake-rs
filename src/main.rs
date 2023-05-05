@@ -62,17 +62,53 @@ struct AtomParams {
     title: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+enum Category {
+    G,
+    R18,
+}
+impl Category {
+    fn subdomain(self) -> &'static str {
+        match self {
+            Category::G => "ncode",
+            Category::R18 => "novel18",
+        }
+    }
+    fn novels_name(self) -> &'static str {
+        match self {
+            Category::G => "novels",
+            Category::R18 => "r18novels",
+        }
+    }
+}
+
 async fn atom(
     Extension(state): Extension<Arc<State>>,
     Path(id): Path<Ncode>,
     Query(params): Query<AtomParams>,
+) -> Result<impl IntoResponse, AtomError> {
+    atom_common(state, id, params, Category::G).await
+}
+async fn atom_r18(
+    Extension(state): Extension<Arc<State>>,
+    Path(id): Path<Ncode>,
+    Query(params): Query<AtomParams>,
+) -> Result<impl IntoResponse, AtomError> {
+    atom_common(state, id, params, Category::R18).await
+}
+
+async fn atom_common(
+    state: Arc<State>,
+    id: Ncode,
+    params: AtomParams,
+    category: Category,
 ) -> Result<impl IntoResponse, AtomError> {
     let Some(start) = params.start else {
         let start = OffsetDateTime::now_utc()
             .replace_nanosecond(0).unwrap()
             .replace_second(0).unwrap();
         let url = url::Url::parse_with_params(
-            &format!("http://example.com/novels/{}/atom.xml", id),
+            &format!("http://example.com/{}/{}/atom.xml", category.novels_name(), id),
             &[("start", &start.format(&Rfc3339).unwrap())]
         ).unwrap();
         return Err(AtomError::Redirect(format!("{}?{}", url.path(), url.query().unwrap())));
@@ -86,6 +122,7 @@ async fn atom(
         title: params.title.as_deref().unwrap_or(""),
         start,
         now,
+        category,
     });
     let feed = feed.to_xml();
     Ok((
@@ -102,6 +139,7 @@ async fn axum() -> shuttle_axum::ShuttleAxum {
     let router = Router::new()
         .route("/", get(root))
         .route("/novels/:id/atom.xml", get(atom))
+        .route("/r18novels/:id/atom.xml", get(atom_r18))
         .layer(Extension(Arc::new(state)));
 
     Ok(router.into())
