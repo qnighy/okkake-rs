@@ -8,19 +8,12 @@ publish = false
 
 [dependencies]
 thiserror = "1.0.40"
-once_cell = { version = "1.17.1", default-features = false, features = [] }
 url = "2.3.1"
 serde = { version = "1.0.160", features = ["derive"] }
 serde_with = "2.3.3"
 quick-xml = { version = "0.28.2", features = ["serialize"] }
 time = { version = "0.3.20", features = ["serde-well-known"] }
-scraper = { version = "0.16.0", default-features = false, features = [] }
-reqwest = "0.11.17"
-sqlx = { version = "0.6.3", features = ["runtime-tokio-native-tls", "postgres", "time"] }
 shuttle-runtime = "0.15.0"
-shuttle-secrets = "0.15.0"
-shuttle-shared-db = { version = "0.15.0", features = ["postgres"] }
 axum = "0.6.18"
 shuttle-axum = "0.15.0"
 tokio = "1.28.0"
-rand = "0.8.5"
