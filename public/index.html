@@ -343,7 +343,11 @@
               {},
               createElement(
                 "a",
-                { href: feedUrl },
+                {
+                  href: feedUrl,
+                  target: "_blank",
+                  rel: "noopener noreferrer",
+                },
                 "RSSを開く"
               )
             ),
