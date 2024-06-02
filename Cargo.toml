@@ -7,13 +7,13 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-thiserror = "1.0.40"
-url = "2.3.1"
-serde = { version = "1.0.160", features = ["derive"] }
-serde_with = "2.3.3"
-quick-xml = { version = "0.28.2", features = ["serialize"] }
-time = { version = "0.3.20", features = ["serde-well-known"] }
-shuttle-runtime = "0.15.0"
-axum = "0.6.18"
-shuttle-axum = "0.15.0"
-tokio = "1.28.0"
+thiserror = "1.0.61"
+url = "2.5.0"
+serde = { version = "1.0.203", features = ["derive"] }
+serde_with = "3.8.1"
+quick-xml = { version = "0.31.0", features = ["serialize"] }
+time = { version = "0.3.36", features = ["serde-well-known"] }
+shuttle-runtime = "0.45.0"
+axum = "0.7.5"
+shuttle-axum = "0.45.0"
+tokio = "1.38.0"
